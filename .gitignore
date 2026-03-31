@@ -1,0 +1,17 @@
+# Bỏ qua thư viện thư mục client (Node/React/Vue...)
+client/node_modules/
+client/build/
+client/dist/
+
+# Bỏ qua môi trường ảo và rác của thư mục server (Python)
+server/venv/
+server/__pycache__/
+*.pyc
+*.pyo
+
+# Bỏ qua các file môi trường chứa thông tin bảo mật
+.env
+
+# Bỏ qua rác của hệ điều hành
+.DS_Store
+Thumbs.db
