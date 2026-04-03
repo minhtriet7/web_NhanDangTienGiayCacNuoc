@@ -1,104 +1,116 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import axiosClient from '../api/axiosClient';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axiosClient from "../api/axiosClient";
 
 function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [formData, setFormData] = useState({ username: "", password: "" });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-      const response = await axiosClient.post('/auth/login', formData, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      // FastAPI thường nhận dữ liệu form-urlencoded cho tính năng Login
+      const params = new URLSearchParams();
+      params.append("username", formData.username);
+      params.append("password", formData.password);
+
+      const response = await axiosClient.post("/auth/login", params, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
+
+      // Lưu Token và Tên user vào LocalStorage
+      localStorage.setItem("access_token", response.data.access_token);
+      localStorage.setItem("username", formData.username);
       
-      localStorage.setItem('access_token', response.data.access_token);
-      localStorage.setItem('username', response.data.username);
-      navigate('/');
+      // Chuyển hướng vào trang chính
+      navigate("/");
     } catch (err) {
-    console.error(err);
-      setError('Tài khoản hoặc mật khẩu không chính xác');
+      setError(
+        err.response?.data?.detail || "Sai tên đăng nhập hoặc mật khẩu!"
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={styles.authWrapper}>
-      <div style={styles.authCard}>
-        <div style={styles.header}>
-          <span style={{fontSize: '40px'}}>🔐</span>
-          <h2 style={styles.title}>Chào Mừng Trở Lại</h2>
-          <p style={styles.subtitle}>Đăng nhập để tiếp tục công việc của bạn</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-indigo-50 font-sans p-4">
+      <div className="max-w-md w-full bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
+        <div className="p-10">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 mb-4 text-3xl shadow-inner">
+              🔐
+            </div>
+            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">Đăng Nhập</h2>
+            <p className="text-slate-500 mt-2">Chào mừng trở lại Hệ thống Giám định AI</p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border-l-4 border-rose-500 text-rose-700 rounded-r-lg text-sm font-medium animate-pulse">
+              ⚠️ {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Tên đăng nhập</label>
+              <input
+                type="text"
+                name="username"
+                required
+                value={formData.username}
+                onChange={handleChange}
+                className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-700 font-medium"
+                placeholder="Nhập username của bạn..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Mật khẩu</label>
+              <input
+                type="password"
+                name="password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-700 font-medium"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-4 rounded-xl font-bold text-white tracking-wide transition-all duration-300 shadow-lg ${
+                loading
+                  ? "bg-indigo-400 cursor-not-allowed shadow-none"
+                  : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 hover:-translate-y-0.5 hover:shadow-indigo-500/30 active:translate-y-0"
+              }`}
+            >
+              {loading ? "ĐANG ĐĂNG NHẬP..." : "ĐĂNG NHẬP"}
+            </button>
+          </form>
         </div>
-
-        {error && <div style={styles.errorBanner}>{error}</div>}
-
-        <form onSubmit={handleLogin} style={styles.form}>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Tên đăng nhập</label>
-            <input 
-              type="text" placeholder="Nhập username" required
-              onChange={e => setUsername(e.target.value)} style={styles.input}
-            />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Mật khẩu</label>
-            <input 
-              type="password" placeholder="Nhập mật khẩu" required
-              onChange={e => setPassword(e.target.value)} style={styles.input}
-            />
-          </div>
-          <button type="submit" style={styles.loginBtn}>Truy Cập Hệ Thống</button>
-        </form>
-        <p style={styles.footerText}>
-          Thành viên mới? <Link to="/register" style={styles.link}>Đăng ký ngay</Link>
-        </p>
+        
+        <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
+          <p className="text-slate-600 font-medium">
+            Chưa có tài khoản?{" "}
+            <Link to="/register" className="text-indigo-600 font-bold hover:underline hover:text-indigo-800 transition-colors">
+              Đăng ký ngay
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
 }
-
-// Bộ Style Xịn Xò
-const styles = {
-  authWrapper: {
-    display: 'flex', justifyContent: 'center', alignItems: 'center',
-    minHeight: '100vh', width: '100vw',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    fontFamily: "'Inter', sans-serif", position: 'fixed', top: 0, left: 0
-  },
-  authCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: '40px', borderRadius: '24px',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-    width: '100%', maxWidth: '400px',
-  },
-  header: { textAlign: 'center', marginBottom: '30px' },
-  title: { fontSize: '26px', fontWeight: '800', color: '#1e293b', margin: '10px 0' },
-  subtitle: { color: '#64748b', fontSize: '14px' },
-  form: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  label: { fontSize: '14px', fontWeight: '600', color: '#475569' },
-  input: {
-    padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0',
-    fontSize: '15px', outline: 'none', backgroundColor: '#f8fafc', color: '#1e293b',
-  },
-  loginBtn: {
-    padding: '14px', borderRadius: '12px', border: 'none',
-    background: 'linear-gradient(to right, #10b981, #059669)',
-    color: 'white', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer'
-  },
-  errorBanner: {
-    backgroundColor: '#fef2f2', color: '#dc2626', padding: '12px',
-    borderRadius: '10px', marginBottom: '20px', fontSize: '14px', textAlign: 'center'
-  },
-  footerText: { textAlign: 'center', marginTop: '20px', color: '#64748b' },
-  link: { color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none' }
-};
 
 export default Login;

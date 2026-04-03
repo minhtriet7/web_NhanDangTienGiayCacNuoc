@@ -1,17 +1,17 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from typing import List
+from typing import List  # Bắt buộc phải import List để nhận nhiều file
 from datetime import datetime
 from app.services.image_processing import detect_and_crop_banknotes 
-from app.services.ai_debate import run_consensus_system 
-from app.security import get_current_user # SỬA LỖI IMPORT Ở ĐÂY
-from app.database import history_collection
+from app.services.ai_debate import run_consensus_system # Hoặc import từ core.py tùy bạn đang dùng file nào
+from app.security import get_current_user
+from app.database import history_collection 
 
-router = APIRouter(prefix="/api", tags=["Analyze"])
+router = APIRouter(prefix="/api")
 
 @router.post("/analyze")
 async def analyze_banknotes(
-    files: List[UploadFile] = File(...), # Nhận một danh sách (mảng) file
-    current_user: str = Depends(get_current_user)
+    files: List[UploadFile] = File(...), # SỬA Ở ĐÂY: Nhận 'files' dạng mảng
+    current_user: str = Depends(get_current_user) 
 ):
     if not files:
         raise HTTPException(status_code=400, detail="Không có file nào được tải lên")
@@ -52,7 +52,7 @@ async def analyze_banknotes(
         # 3. Lưu vào MongoDB Lịch sử
         history_record = {
             "username": current_user,
-            "filenames": filenames, # Lưu dạng mảng tên file
+            "filename": ", ".join(filenames), # Gộp tên các file thành 1 chuỗi để hiển thị lịch sử
             "timestamp": datetime.now().isoformat(),
             "results": final_response 
         }

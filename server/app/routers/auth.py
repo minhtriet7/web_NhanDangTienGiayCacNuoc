@@ -21,7 +21,8 @@ def dang_ky(user: UserRegister):
     new_user = {
         "username": user.username,
         "password": hashed_password,
-        
+        "full_name": user.full_name, # THÊM DÒNG NÀY
+        "email": user.email,
         "created_at": datetime.now().isoformat()
     }
     users_collection.insert_one(new_user)

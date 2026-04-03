@@ -1,149 +1,140 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 
 function Register() {
   const [formData, setFormData] = useState({
-    full_name: "",
-    email: "",
     username: "",
+    email: "",
     password: "",
     confirmPassword: "",
   });
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleRegister = async (e) => {
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      return setError("Mật khẩu xác nhận không khớp!");
+      setError("Mật khẩu xác nhận không khớp!");
+      return;
     }
 
     setLoading(true);
+    setError(null);
+
     try {
       await axiosClient.post("/auth/register", {
-        full_name: formData.full_name,
-        email: formData.email,
         username: formData.username,
+        email: formData.email,
         password: formData.password,
       });
-      alert("Tạo tài khoản thành công!");
+      alert("Đăng ký thành công! Vui lòng đăng nhập.");
       navigate("/login");
     } catch (err) {
-      setError(err.response?.data?.detail || "Đăng ký thất bại!");
+      setError(err.response?.data?.detail || "Lỗi hệ thống. Vui lòng thử lại!");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={styles.authWrapper}>
-      <div style={styles.authCard}>
-        <div style={styles.header}>
-          <span style={{ fontSize: "40px" }}>📝</span>
-          <h2 style={styles.title}>Tham Gia Hệ Thống</h2>
-          <p style={styles.subtitle}>Giám định tiền tệ với sức mạnh AI</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-indigo-50 font-sans p-4">
+      <div className="max-w-md w-full bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
+        <div className="p-10">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 text-3xl shadow-inner">
+              ✨
+            </div>
+            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">Đăng Ký</h2>
+            <p className="text-slate-500 mt-2">Tạo tài khoản Giám định AI mới</p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border-l-4 border-rose-500 text-rose-700 rounded-r-lg text-sm font-medium animate-pulse">
+              ⚠️ {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Tên đăng nhập</label>
+              <input
+                type="text"
+                name="username"
+                required
+                value={formData.username}
+                onChange={handleChange}
+                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-slate-700"
+                placeholder="Nhập username..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Email</label>
+              <input
+                type="email"
+                name="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-slate-700"
+                placeholder="example@gmail.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Mật khẩu</label>
+              <input
+                type="password"
+                name="password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-slate-700"
+                placeholder="••••••••"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Xác nhận Mật khẩu</label>
+              <input
+                type="password"
+                name="confirmPassword"
+                required
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-slate-700"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-4 mt-2 rounded-xl font-bold text-white tracking-wide transition-all duration-300 shadow-lg ${
+                loading
+                  ? "bg-emerald-400 cursor-not-allowed shadow-none"
+                  : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 hover:-translate-y-0.5 hover:shadow-emerald-500/30 active:translate-y-0"
+              }`}
+            >
+              {loading ? "ĐANG XỬ LÝ..." : "ĐĂNG KÝ TÀI KHOẢN"}
+            </button>
+          </form>
         </div>
-
-        {error && <div style={styles.errorBanner}>{error}</div>}
-
-        <form onSubmit={handleRegister} style={styles.form}>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Họ và Tên</label>
-            <input
-              type="text" placeholder="Nguyễn Văn A" required
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Email</label>
-            <input
-              type="email" placeholder="email@gmail.com" required
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Tên đăng nhập</label>
-            <input
-              type="text" placeholder="username123" required
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.row}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Mật khẩu</label>
-              <input
-                type="password" placeholder="••••" required
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                style={styles.input}
-              />
-            </div>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Xác nhận</label>
-              <input
-                type="password" placeholder="••••" required
-                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                style={styles.input}
-              />
-            </div>
-          </div>
-
-          <button type="submit" style={styles.primaryBtn} disabled={loading}>
-            {loading ? "Đang xử lý..." : "Tạo Tài Khoản Ngay"}
-          </button>
-        </form>
-
-        <p style={styles.footerText}>
-          Đã có tài khoản? <Link to="/login" style={styles.link}>Đăng nhập</Link>
-        </p>
+        
+        <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
+          <p className="text-slate-600 font-medium">
+            Đã có tài khoản?{" "}
+            <Link to="/login" className="text-emerald-600 font-bold hover:underline hover:text-emerald-800 transition-colors">
+              Đăng nhập ngay
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  authWrapper: {
-    display: 'flex', justifyContent: 'center', alignItems: 'center',
-    minHeight: '100vh', width: '100vw',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    fontFamily: "'Inter', sans-serif", position: 'fixed', top: 0, left: 0
-  },
-  authCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: '30px', borderRadius: '24px',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-    width: '100%', maxWidth: '450px',
-  },
-  header: { textAlign: 'center', marginBottom: '20px' },
-  title: { fontSize: '24px', fontWeight: '800', color: '#1e293b', margin: '5px 0' },
-  subtitle: { color: '#64748b', fontSize: '13px' },
-  form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 },
-  label: { fontSize: '13px', fontWeight: '600', color: '#475569' },
-  input: {
-    padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0',
-    fontSize: '14px', outline: 'none', backgroundColor: '#f8fafc'
-    , color: '#1e293b',
-  },
-  row: { display: 'flex', gap: '10px' },
-  primaryBtn: {
-    padding: '12px', borderRadius: '12px', border: 'none',
-    background: 'linear-gradient(to right, #3b82f6, #2563eb)',
-    color: 'white', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer'
-  },
-  errorBanner: {
-    backgroundColor: '#fef2f2', color: '#dc2626', padding: '10px',
-    borderRadius: '10px', fontSize: '13px', textAlign: 'center'
-  },
-  footerText: { textAlign: 'center', marginTop: '15px', color: '#64748b', fontSize: '14px' },
-  link: { color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none' }
-};
 
 export default Register;

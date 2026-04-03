@@ -16,7 +16,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(analyze.router)
 app.include_router(history.router)
-
+app.include_router(analyze.router, prefix="/api", tags=["Analyze API"])
 @app.get("/")
 def kiem_tra_server():
     return {"status": "✅ Server đang chạy với Clean Architecture!"}
