@@ -18,7 +18,7 @@ def detect_and_crop_banknotes(image_bytes):
     edges = cv2.Canny(blurred, 40, 150)
     
     # Nối các đường viền bị đứt
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     closed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
     
     contours, _ = cv2.findContours(closed_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

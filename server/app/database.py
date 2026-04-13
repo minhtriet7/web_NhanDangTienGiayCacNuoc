@@ -8,3 +8,8 @@ db = mongo_client["banknote_ai_db"]
 # Khai báo các bảng (Collections)
 users_collection = db["users"]              
 history_collection = db["analysis_history"]
+payments_collection = db["payments"]
+token_history_collection = db["token_history"]
+packages_collection = db["packages"]
+feedback_collection = db["feedback"]
+tickets_collection = db["tickets"]

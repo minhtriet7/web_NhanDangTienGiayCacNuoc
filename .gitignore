@@ -12,6 +12,7 @@ server/__pycache__/
 # Bỏ qua các file môi trường chứa thông tin bảo mật
 .env
 
+*.env
 # Bỏ qua rác của hệ điều hành
 .DS_Store
 Thumbs.db

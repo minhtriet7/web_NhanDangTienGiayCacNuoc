@@ -1,9 +1,17 @@
-import uvicorn # Thêm dòng này
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, analyze, history
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.limiter import limiter # Nhập khiên từ file limiter.py
+from app.routers import auth, analyze, history, payment, admin
 
 app = FastAPI()
+
+# Gắn Limiter vào ứng dụng FastAPI
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,15 +21,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(payment.router)
 app.include_router(auth.router)
-app.include_router(analyze.router)
 app.include_router(history.router)
+app.include_router(admin.router)
 app.include_router(analyze.router, prefix="/api", tags=["Analyze API"])
+
 @app.get("/")
 def kiem_tra_server():
-    return {"status": "✅ Server đang chạy với Clean Architecture!"}
+    return {"status": "✅ Server đang chạy với Clean Architecture (Đã bật Anti-Spam)!"}
 
-# THÊM ĐOẠN NÀY VÀO CUỐI FILE
 if __name__ == "__main__":
-    # Đặt reload=True để code tự cập nhật khi bạn bấm Save
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
