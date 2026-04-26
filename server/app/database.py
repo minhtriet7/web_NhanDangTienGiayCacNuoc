@@ -13,3 +13,6 @@ token_history_collection = db["token_history"]
 packages_collection = db["packages"]
 feedback_collection = db["feedback"]
 tickets_collection = db["tickets"]
+
+# BẢNG MỚI ĐƯỢC THÊM VÀO ĐỂ CHỐNG TRÀN RAM:
+tasks_collection = db["tasks"]

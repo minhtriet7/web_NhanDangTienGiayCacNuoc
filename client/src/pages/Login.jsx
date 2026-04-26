@@ -44,7 +44,7 @@ function Login() {
       const response = await axiosClient.get("/auth/google/login");
       window.location.href = response.data.url;
     } catch (error) {
-      alert("Không thể kết nối với Google lúc này.");
+      alert("Không thể kết nối với Google lúc này.", error);
     }
   };
 
@@ -67,10 +67,10 @@ function Login() {
                 👋
               </div>
               <h2 className="text-4xl font-black text-slate-900 mb-3 tracking-tight">
-                Mừng bạn trở lại
+                CHÀO MỪNG TRỞ LẠI!
               </h2>
               <p className="text-slate-500 font-medium text-lg">
-                Đăng nhập để tiếp tục quản lý chứng thư
+                ĐĂNG NHẬP
               </p>
             </div>
 
@@ -89,7 +89,7 @@ function Login() {
                 alt="Google"
                 className="w-5 h-5 group-hover:scale-110 transition-transform"
               />
-              Tiếp tục với Google
+              TIẾP TỤC VỚI GOOGLE 
             </button>
 
             <div className="flex items-center gap-4 mb-8">
@@ -103,7 +103,7 @@ function Login() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
-                  Email / Tên đăng nhập
+                  EMAIL / TÊN ĐĂNG NHẬP
                 </label>
                 <input
                   type="text"
@@ -118,7 +118,7 @@ function Login() {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-sm font-bold text-slate-700">
-                    Mật khẩu
+                    MẬT KHẨU
                   </label>
                   {/* GIỮ LẠI NÚT QUÊN MẬT KHẨU TẠI ĐÂY */}
                   <Link
@@ -158,7 +158,7 @@ function Login() {
                 to="/register"
                 className="text-indigo-600 font-black hover:underline px-1"
               >
-                Tạo mới ngay
+                ĐĂNG KÝ NGAY 
               </Link>
             </p>
           </div>

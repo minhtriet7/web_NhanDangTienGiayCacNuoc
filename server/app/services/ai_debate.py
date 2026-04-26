@@ -1,81 +1,104 @@
 import os
-import base64
 import json
+import time
+import random
 import concurrent.futures
 from io import BytesIO
 from dotenv import load_dotenv
-from groq import Groq
 from google import genai 
 from PIL import Image, ImageFile 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True 
 load_dotenv()
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
+# 🚀 NÂNG CẤP TỐI THƯỢNG: Hàm bóc tách JSON "bất tử"
 def clean_json(text):
+    if not text: 
+        return '[{"error": "AI trả về dữ liệu rỗng"}]'
+        
     text = text.strip()
-    if text.startswith("```json"): 
-        text = text[7:]
-    elif text.startswith("```"): 
-        text = text[3:]
-    if text.endswith("```"): 
-        text = text[:-3]
-    return text.strip()
+    
+    # 1. Thử parse ngay lập tức nếu AI trả về JSON chuẩn
+    try:
+        json.loads(text)
+        return text
+    except:
+        pass
+
+    # 2. Thuật toán "Móc ruột": Quét từ dấu '[' đầu tiên đến dấu ']' cuối cùng
+    try:
+        start_idx = text.find('[')
+        end_idx = text.rfind(']') + 1
+        
+        if start_idx != -1 and end_idx != -1:
+            extracted_json = text[start_idx:end_idx]
+            # Test xem cái móc ra có chuẩn JSON không
+            json.loads(extracted_json) 
+            return extracted_json
+    except:
+        pass
+
+    # 3. Kịch bản dự phòng: Bóc theo Markdown (```json)
+    try:
+        if '```json' in text:
+            extracted = text.split('```json', 1)[1].split('```', 1)[0].strip()
+            json.loads(extracted)
+            return extracted
+        elif '```' in text:
+            extracted = text.split('```', 1)[1].split('```', 1)[0].strip()
+            json.loads(extracted)
+            return extracted
+    except:
+        pass
+        
+    # Nếu tạch cả 3 kịch bản, in log ra để Giám đốc kiểm tra
+    print(f"❌ Lỗi Parse JSON bất trị:\n--- Data thô ---\n{text}\n----------------")
+    return json.dumps([{"error": "AI bị ảo giác, trả về sai định dạng JSON."}])
+
+
+# 1. Chuyên gia Tổng quan
+MODEL_EXP1_MAIN = "gemini-2.5-flash"
+MODEL_EXP1_BACKUP = "gemini-2.5-flash-lite"
+
+# 2. Chuyên gia Chi tiết
+MODEL_EXP2_MAIN = "gemini-2.5-flash-lite"
+MODEL_EXP2_BACKUP = "gemini-2.5-flash"
+#gemini-2.5-flash-lite
+# 3. Chuyên gia Phản biện
+MODEL_EXP3_MAIN = "gemini-3.1-flash-lite-preview"
+MODEL_EXP3_BACKUP = "gemini-2.5-flash-lite"
+
+# 4. Trọng tài
+MODEL_JUDGE_MAIN = "gemini-2.5-flash-lite" 
+MODEL_JUDGE_BACKUP = "gemini-3.0-flash-preview"
 
 # ==========================================
-# HỆ THỐNG PROMPT QUỐC TẾ (SỬA LỖI ẢO GIÁC ĐỐI TƯỢNG)
+# HỆ THỐNG PROMPT 
 # ==========================================
-PROMPT_GEMINI_ART = """
-Bạn là Chuyên gia Hình ảnh Tiền tệ Toàn cầu. Bức ảnh này có thể chứa 1 HOẶC NHIỀU tờ tiền.
-Hãy nhận diện TẤT CẢ các tờ tiền bạn nhìn thấy. Bỏ qua các dòng chữ.
-
-BẮT BUỘC TRẢ VỀ MỘT MẢNG JSON (ARRAY), MỖI TỜ TIỀN LÀ 1 PHẦN TỬ:
-[
-    {
-        "quoc_gia": "Tên quốc gia", 
-        "menh_gia": "Số mệnh giá", 
-        "nam_phat_hanh": "Năm", 
-        "chat_lieu": "Giấy (Cotton) hoặc Polymer", 
-        "mat_truoc": "Mô tả chân dung", 
-        "mat_sau": "Mô tả phong cảnh"
-    }
-]
+RULE_BASE = """
+QUY TẮC SỐ 1: Đây là hệ thống giám định TIỀN GIẤY. Nếu hình ảnh bị gập, rách, hoặc mờ, hãy DỰA VÀO CÁC CHỮ VIẾT, CHÂN DUNG CÒN LẠI để phân tích.
+QUY TẮC SỐ 2: TUYỆT ĐỐI KHÔNG ĐOÁN MÒ các quốc gia xa lạ nếu không có bằng chứng chữ viết rõ ràng. Nếu không chắc chắn, hãy ưu tiên các loại tiền tệ phổ biến (Việt Nam, Mỹ, Châu Âu).
+QUY TẮC SỐ 3: Nếu không thấy Năm phát hành, BẮT BUỘC SUY LUẬN ra thập niên/năm chính xác nhất.
 """
 
-PROMPT_QWEN_TEXT = """
-Bạn là Chuyên gia Ngôn ngữ Tiền tệ Quốc tế. Bức ảnh này có thể chứa 1 HOẶC NHIỀU tờ tiền.
-Hãy đọc chính xác ngôn ngữ, con số, chữ cái trên TẤT CẢ các tờ tiền. Đếm kỹ các số 0 của mệnh giá.
-
-BẮT BUỘC TRẢ VỀ MỘT MẢNG JSON (ARRAY), MỖI TỜ TIỀN LÀ 1 PHẦN TỬ:
-[
-    {
-        "quoc_gia": "Dựa vào ngôn ngữ/tên ngân hàng để đoán", 
-        "menh_gia": "Số tiền + Đơn vị", 
-        "nam_phat_hanh": "Tìm năm in", 
-        "chat_lieu": "Không xác định", 
-        "mat_truoc": "Trích xuất chữ", 
-        "mat_sau": "Trích xuất chữ"
-    }
-]
+PROMPT_EXP1_OVERVIEW = RULE_BASE + """
+Bạn là Chuyên gia Tổng quan. Quét nhanh phong cách, màu sắc, mệnh giá.
+BẮT BUỘC TRẢ VỀ MẢNG JSON (ARRAY):
+[{"quoc_gia": "Tên quốc gia", "menh_gia": "Số mệnh giá + Mã ISO", "nam_phat_hanh": "Năm in (hoặc tự suy luận)", "chat_lieu": "Giấy / Polymer / Kim loại", "mat_truoc": "Mô tả màu sắc, bố cục, hình ảnh", "mat_sau": "Mô tả màu sắc, bố cục, hình ảnh"}]
 """
 
-PROMPT_LLAMA_LOGIC = """
-Bạn là Chuyên gia Lịch sử & Biểu tượng Tiền tệ Thế giới. Bức ảnh này có thể chứa 1 HOẶC NHIỀU tờ tiền.
-TẬP TRUNG VÀO: Quốc huy, cờ, biểu tượng quốc gia, ký hiệu tiền tệ.
+PROMPT_EXP2_DETAILS = RULE_BASE + """
+Bạn là Chuyên gia Chi tiết. Soi kỹ chữ in siêu nhỏ, hình bóng chìm.
+BẮT BUỘC TRẢ VỀ MẢNG JSON (ARRAY):
+[{"quoc_gia": "Dựa vào chữ viết", "menh_gia": "Số tiền + Mã ISO", "nam_phat_hanh": "Năm in (hoặc tự suy luận)", "chat_lieu": "Phân tích chất liệu", "mat_truoc": "Liệt kê chi tiết hoa văn, chữ ký", "mat_sau": "Liệt kê chi tiết hoa văn, con số ẩn"}]
+"""
 
-BẮT BUỘC TRẢ VỀ MỘT MẢNG JSON (ARRAY), MỖI TỜ TIỀN LÀ 1 PHẦN TỬ:
-[
-    {
-        "quoc_gia": "Dựa vào quốc huy/cờ", 
-        "menh_gia": "Đếm kỹ số 0", 
-        "nam_phat_hanh": "Tìm năm in", 
-        "chat_lieu": "Đoán Giấy/Polymer", 
-        "mat_truoc": "Mô tả quốc huy", 
-        "mat_sau": "Mô tả sự kiện/công trình"
-    }
-]
+PROMPT_EXP3_CRITIC = RULE_BASE + """
+Bạn là Chuyên gia Phản biện. Tìm kiếm dấu hiệu bất thường, vết xước để xác minh.
+BẮT BUỘC TRẢ VỀ MẢNG JSON (ARRAY):
+[{"quoc_gia": "Xác nhận quốc gia", "menh_gia": "Xác nhận mệnh giá", "nam_phat_hanh": "Năm in (hoặc tự suy luận)", "chat_lieu": "Chất liệu", "mat_truoc": "Đánh giá tình trạng cũ/mới, nếp gấp, vết mờ", "mat_sau": "Đánh giá tình trạng cũ/mới, nếp gấp, vết mờ"}]
 """
 
 def process_image_safe(img_data):
@@ -85,148 +108,151 @@ def process_image_safe(img_data):
         img = img_data
     try: img.load()
     except: pass
-    
     img_copy = img.copy()
     img_copy.thumbnail((1200, 1200)) 
     if img_copy.mode in ("RGBA", "P"): 
         img_copy = img_copy.convert("RGB")
-        
     buffered = BytesIO()
     img_copy.save(buffered, format="JPEG", quality=95)
-    clean_bytes = buffered.getvalue()
-    b64_string = base64.b64encode(clean_bytes).decode("utf-8")
-    return clean_bytes, b64_string
+    return buffered.getvalue()
 
-def call_gemini_vision(clean_bytes, prompt):
-    try:
-        safe_img = Image.open(BytesIO(clean_bytes))
-        res = gemini_client.models.generate_content(
-            model='gemini-2.5-flash', 
-            contents=[prompt, safe_img]
-        )
-        return clean_json(res.text)
-    except Exception as e: return json.dumps([{"error": f"Gemini Lỗi: {str(e)}"}])
+def call_gemini_vision(clean_bytes, prompt, model_name):
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            safe_img = Image.open(BytesIO(clean_bytes))
+            res = gemini_client.models.generate_content(
+                model=model_name, contents=[prompt, safe_img]
+            )
+            return clean_json(res.text)
+        except Exception as e:
+            print(f"⚠️ Vision ({model_name} Lần {attempt+1}): {str(e)}")
+            if attempt < max_retries - 1: time.sleep(random.uniform(3, 5))
+            else: return json.dumps([{"error": f"Lỗi gọi {model_name}. Vui lòng thử lại!"}])
 
-def call_groq_vision(b64_string, prompt):
-    try:
-        res = groq_client.chat.completions.create(
-            model="llama-3.2-11b-vision-preview",
-            messages=[{
-                "role": "user", 
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_string}"}}
-                ]
-            }],
-            temperature=0.1
-        )
-        if not getattr(res, 'choices', None) or len(res.choices) == 0:
-             return json.dumps([{"error": "Groq Vision không trả kết quả."}])
-        return clean_json(res.choices[0].message.content)
-    except Exception as e: return json.dumps([{"error": f"Groq Lỗi: {str(e)}"}])
+def call_debate_agent_gemini(agent_role, original_json, peers_context, model_name):
+    if "Hình ảnh không hợp lệ" in original_json or "Hình ảnh không hợp lệ" in peers_context:
+        return original_json
 
-def call_debate_agent(agent_role, original_json, peers_context):
     debate_prompt = f"""
-    Bạn đang đóng vai: {agent_role} trong hội đồng giám định tiền tệ.
-    Mảng kết quả ban đầu của bạn (JSON): {original_json}
-    Mảng kết quả của đồng nghiệp: {peers_context}
+    Bạn đang đóng vai: {agent_role}.
+    Kết quả phân tích độc lập ban đầu của bạn: {original_json}
+    Kết quả phân tích của đồng nghiệp: {peers_context}
     
-    LUẬT GIÁM ĐỊNH:
-    1. Kiểm tra chéo số lượng tờ tiền mà các bên tìm thấy. 
-    2. BẮT BUỘC trả về kết quả cuối cùng dưới định dạng MẢNG JSON (JSON ARRAY).
-    
-    [
-        {{ "quoc_gia": "...", "menh_gia": "...", "nam_phat_hanh": "...", "chat_lieu": "...", "mat_truoc": "...", "mat_sau": "..." }}
-    ]
-    CHỈ TRẢ VỀ JSON ARRAY. KHÔNG GIẢI THÍCH GÌ THÊM.
+    NHIỆM VỤ TRANH BIỆN:
+    1. So sánh Dữ liệu cốt lõi (Quốc gia, Mệnh giá, Năm). Chỉ sửa của bạn nếu bạn sai khác hoàn toàn so với đa số.
+    2. BẮT BUỘC giữ vững góc nhìn chuyên môn của "{agent_role}". Trình bày lại kết quả theo form JSON quy định.
+    BẮT BUỘC TRẢ VỀ CHỈ MỘT MẢNG JSON ARRAY.
     """
-    try:
-        res = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": debate_prompt}],
-            temperature=0.1
-        )
-        return clean_json(res.choices[0].message.content)
-    except Exception as e: return json.dumps([{"error": "Lỗi Debate Agent"}])
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            res = gemini_client.models.generate_content(
+                model=model_name, contents=[debate_prompt]
+            )
+            return clean_json(res.text)
+        except Exception as e:
+            print(f"⚠️ Debate ({agent_role} Lần {attempt+1}): {str(e)}")
+            if attempt < max_retries - 1: time.sleep(random.uniform(3, 5))
+            else: return json.dumps([{"error": f"Hệ thống quá tải. Quét lại sau ít phút."}])
 
-def final_judge_groq(json_1, json_2, json_3):
-    # ĐÃ SỬA CÂU THẦN CHÚ: ÉP AI KHÔNG ĐƯỢC BỊA THÊM "ĐỐI TƯỢNG 2" NẾU KHÔNG CÓ
+def final_judge_gemini(json_1, json_2, json_3, model_name):
+    if "Hình ảnh không hợp lệ" in json_1 or "Hình ảnh không hợp lệ" in json_2:
+        return "❌ Hình ảnh không hợp lệ (Không phải tiền tệ)."
+
     prompt_tong_hop = f"""
-    Bạn là Thẩm định viên Trưởng Quốc Tế. Dưới đây là 3 mảng JSON ĐÃ QUA TRANH BIỆN:
-    - Mỹ thuật: {json_1}
-    - Ngôn ngữ: {json_2}
-    - Lịch sử: {json_3}
+    Thẩm định viên Trưởng. JSON ĐÃ TRANH BIỆN từ 3 chuyên gia:
+    - Tổng quan: {json_1}
+    - Chi tiết: {json_2}
+    - Phản biện: {json_3}
 
-    NHIỆM VỤ: Tổng hợp thành Báo Cáo Chính Thức. Bóc tách rõ từng tờ tiền.
-    LƯU Ý CỰC KỲ QUAN TRỌNG: Trong các mảng JSON trên có bao nhiêu tờ tiền thì in ra bấy nhiêu "Đối tượng". TUYỆT ĐỐI KHÔNG tự bịa thêm "Đối tượng 2" nếu chỉ có 1 tờ tiền.
-
-    ĐỊNH DẠNG MARKDOWN YÊU CẦU:
-    ### KẾT LUẬN GIÁM ĐỊNH
-    [Tóm tắt về các quốc gia và mệnh giá phát hiện được trong ảnh]
-
-    #### 💵 Đối tượng 1:
-    * **Quốc gia**: ...
-    * **Mệnh giá**: ...
-    * **Năm phát hành**: ...
-    * **Chất liệu**: ...
-    * **Mặt trước**: ...
-    * **Mặt sau**: ...
-
-    [CHỈ lặp lại khối Đối tượng tiếp theo NẾU thực sự có tờ tiền thứ 2, thứ 3...]
-
-    ---
-    *Ghi chú của Thẩm định viên:* [Nhận xét về mức độ rõ nét của ảnh và mức độ đồng thuận của AI]
+    NHIỆM VỤ: 
+    1. So sánh, chọn KẾT QUẢ ĐÚNG NHẤT VÀ DUY NHẤT.
+    ĐỊNH DẠNG YÊU CẦU:
+    ### 🏆 [MỆNH GIÁ] - [QUỐC GIA]
+    * **Năm phát hành:** ...
+    * **Chất liệu:** ...
+    * **Đánh giá:** [1 CÂU DUY NHẤT tóm tắt cuộc tranh biện].
     """
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            res = gemini_client.models.generate_content(
+                model=model_name, contents=[prompt_tong_hop]
+            )
+            return res.text
+        except Exception as e:
+            if attempt < max_retries - 1: time.sleep(3)
+            else: return f"Lỗi tổng hợp: {str(e)}"
+
+def check_early_consensus(json1_str, json2_str, json3_str):
+    """ THUẬT TOÁN EARLY EXIT: Ktra 3 AI có đồng thuận ngay từ Bước 1 không """
     try:
-        res = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt_tong_hop}],
-            temperature=0.1
-        )
-        return res.choices[0].message.content
-    except Exception as e: return f"Lỗi tổng hợp: {str(e)}"
+        j1, j2, j3 = json.loads(json1_str), json.loads(json2_str), json.loads(json3_str)
+        # Kiểm tra xem có lấy được bản ghi đầu tiên của các mảng không
+        if len(j1) > 0 and len(j2) > 0 and len(j3) > 0:
+            if (j1[0].get("quoc_gia") == j2[0].get("quoc_gia") == j3[0].get("quoc_gia")) and \
+               (j1[0].get("menh_gia") == j2[0].get("menh_gia") == j3[0].get("menh_gia")):
+                return True
+        return False
+    except:
+        return False
 
+# ==========================================
+# LUỒNG XỬ LÝ CHÍNH
+# ==========================================
 def run_consensus_system(image):
-    clean_bytes, b64_string = process_image_safe(image)
-    
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        f_gemini = executor.submit(call_gemini_vision, clean_bytes, PROMPT_GEMINI_ART)
-        f_qwen = executor.submit(call_groq_vision, b64_string, PROMPT_QWEN_TEXT)
-        f_llama = executor.submit(call_groq_vision, b64_string, PROMPT_LLAMA_LOGIC)
+    try:
+        clean_bytes = process_image_safe(image)
         
-        try: kq_gemini_init = f_gemini.result(timeout=30)
-        except: kq_gemini_init = '[{"error": "Gemini Timeout"}]'
+        # BƯỚC 1: SOI ĐỘC LẬP
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            f_exp1 = executor.submit(call_gemini_vision, clean_bytes, PROMPT_EXP1_OVERVIEW, MODEL_EXP1_MAIN)
+            f_exp2 = executor.submit(call_gemini_vision, clean_bytes, PROMPT_EXP2_DETAILS, MODEL_EXP2_MAIN)
+            f_exp3 = executor.submit(call_gemini_vision, clean_bytes, PROMPT_EXP3_CRITIC, MODEL_EXP3_MAIN)
             
-        try: kq_qwen_init = f_qwen.result(timeout=30)
-        except: kq_qwen_init = '[{"error": "Groq Qwen Timeout"}]'
-            
-        try: kq_llama_init = f_llama.result(timeout=30)
-        except: kq_llama_init = '[{"error": "Groq Llama Timeout"}]'
+            kq_exp1_init = f_exp1.result(timeout=45)
+            kq_exp2_init = f_exp2.result(timeout=45)
+            kq_exp3_init = f_exp3.result(timeout=45)
 
-    if "error" in kq_gemini_init and "error" in kq_qwen_init and "error" in kq_llama_init:
-        raise Exception(f"Lỗi API: G({kq_gemini_init}) | Q({kq_qwen_init}) | L({kq_llama_init})")
+        # KÍCH HOẠT EARLY EXIT
+        if check_early_consensus(kq_exp1_init, kq_exp2_init, kq_exp3_init):
+            print("⚡ THUẬT TOÁN EARLY EXIT KÍCH HOẠT: Bỏ qua Tranh biện!")
+            bao_cao_cuoi = final_judge_gemini(kq_exp1_init, kq_exp2_init, kq_exp3_init, MODEL_JUDGE_MAIN)
+            return {
+                "chuyen_gia_1": kq_exp1_init,        
+                "chuyen_gia_2": kq_exp2_init,    
+                "chuyen_gia_3": kq_exp3_init,          
+                "final_report": bao_cao_cuoi
+            }
 
-    context_for_debate = f"- Mỹ thuật: {kq_gemini_init}\n- Ngôn ngữ: {kq_qwen_init}\n- Lịch sử: {kq_llama_init}"
-    
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        f_debate_gemini = executor.submit(call_debate_agent, "Mỹ thuật", kq_gemini_init, context_for_debate)
-        f_debate_qwen = executor.submit(call_debate_agent, "Ngôn ngữ", kq_qwen_init, context_for_debate)
-        f_debate_llama = executor.submit(call_debate_agent, "Lịch sử", kq_llama_init, context_for_debate)
+        context_for_debate = f"- Tổng quan: {kq_exp1_init}\n- Chi tiết: {kq_exp2_init}\n- Phản biện: {kq_exp3_init}"
+        time.sleep(2)
         
-        try: kq_gemini_final = f_debate_gemini.result(timeout=30)
-        except: kq_gemini_final = '[{"error": "Debate Gemini Timeout"}]'
+        # BƯỚC 2: TRANH BIỆN CHÉO
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            f_debate_1 = executor.submit(call_debate_agent_gemini, "Chuyên gia Tổng quan", kq_exp1_init, context_for_debate, MODEL_EXP1_BACKUP)
+            f_debate_2 = executor.submit(call_debate_agent_gemini, "Chuyên gia Chi tiết", kq_exp2_init, context_for_debate, MODEL_EXP2_BACKUP)
+            f_debate_3 = executor.submit(call_debate_agent_gemini, "Chuyên gia Phản biện", kq_exp3_init, context_for_debate, MODEL_EXP3_BACKUP)
             
-        try: kq_qwen_final = f_debate_qwen.result(timeout=30)
-        except: kq_qwen_final = '[{"error": "Debate Qwen Timeout"}]'
-            
-        try: kq_llama_final = f_debate_llama.result(timeout=30)
-        except: kq_llama_final = '[{"error": "Debate Llama Timeout"}]'
+            kq_exp1_final = f_debate_1.result(timeout=40)
+            kq_exp2_final = f_debate_2.result(timeout=40)
+            kq_exp3_final = f_debate_3.result(timeout=40)
 
-    bao_cao_cuoi = final_judge_groq(kq_gemini_final, kq_qwen_final, kq_llama_final)
-    
-    return {
-        "gemini": kq_gemini_final,
-        "openrouter": kq_qwen_final, 
-        "groq": kq_llama_final,        
-        "final_report": bao_cao_cuoi
-    }
+        # BƯỚC 3: TRỌNG TÀI
+        bao_cao_cuoi = final_judge_gemini(kq_exp1_final, kq_exp2_final, kq_exp3_final, MODEL_JUDGE_MAIN)
+        
+        return {
+            "chuyen_gia_1": kq_exp1_final,        
+            "chuyen_gia_2": kq_exp2_final,    
+            "chuyen_gia_3": kq_exp3_final,          
+            "final_report": bao_cao_cuoi
+        }
+    except Exception as e:
+        print(f"❌ Lỗi luồng chính: {str(e)}")
+        return {
+            "chuyen_gia_1": '[{"error": "Tiến trình AI bị lỗi"}]',        
+            "chuyen_gia_2": '[{"error": "Tiến trình AI bị lỗi"}]',    
+            "chuyen_gia_3": '[{"error": "Tiến trình AI bị lỗi"}]',          
+            "final_report": f"❌ Lỗi hệ thống: {str(e)}"
+        }

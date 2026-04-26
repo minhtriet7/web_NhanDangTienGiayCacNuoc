@@ -16,3 +16,16 @@ server/__pycache__/
 # Bỏ qua rác của hệ điều hành
 .DS_Store
 Thumbs.db
+# Bỏ qua thư viện của Node.js (ở cả client và server)
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Bỏ qua môi trường ảo của Python
+server/venv/
+server/__pycache__/
+*.pyc
+
+# Bỏ qua file chứa Key bảo mật
+.env
+*.env
